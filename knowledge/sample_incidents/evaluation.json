@@ -1,0 +1,76 @@
+[
+  {
+    "title": "VPN not connecting",
+    "description": "Cannot connect to corporate VPN after password update",
+    "expected_category": "Network",
+    "expected_priority": "P2"
+  },
+  {
+    "title": "Password expired",
+    "description": "Password expired and user cannot sign in",
+    "expected_category": "Authentication",
+    "expected_priority": "P2"
+  },
+  {
+    "title": "Laptop overheating",
+    "description": "Laptop overheats and fan is loud during video calls",
+    "expected_category": "Hardware",
+    "expected_priority": "P3"
+  },
+  {
+    "title": "Outlook not opening",
+    "description": "Outlook desktop app crashes immediately on launch",
+    "expected_category": "Software",
+    "expected_priority": "P3"
+  },
+  {
+    "title": "Database connection timeout",
+    "description": "Production database connection timeout affecting multiple users",
+    "expected_category": "Database",
+    "expected_priority": "P1",
+    "affected_users": 30,
+    "business_criticality": 3,
+    "expected_escalation": true
+  },
+  {
+    "title": "Printer not working",
+    "description": "Office printer is offline and cannot print",
+    "expected_category": "Hardware",
+    "expected_priority": "P2"
+  },
+  {
+    "title": "Website unavailable",
+    "description": "Customer website unavailable to all users",
+    "expected_category": "Cloud",
+    "expected_priority": "P1",
+    "affected_users": 200,
+    "business_criticality": 3,
+    "expected_escalation": true
+  },
+  {
+    "title": "Account locked",
+    "description": "Account locked after repeated sign in attempts",
+    "expected_category": "Authentication",
+    "expected_priority": "P3"
+  },
+  {
+    "title": "DNS resolution failure",
+    "description": "DNS cannot resolve internal hostname for several users",
+    "expected_category": "Network",
+    "expected_priority": "P2"
+  },
+  {
+    "title": "VPN connectivity restored",
+    "description": "VPN connection restored after a transient issue; user confirms it is working again and requests a final connectivity verification",
+    "expected_category": "Network",
+    "expected_priority": "P3"
+  },
+  {
+    "title": "Unknown error",
+    "description": "Unknown error and there is not enough information to identify the problem",
+    "expected_category": "Other",
+    "expected_priority": "P4",
+    "expected_escalation": true,
+    "business_criticality": 1
+  }
+]

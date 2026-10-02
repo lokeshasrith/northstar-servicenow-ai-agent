@@ -1,0 +1,45 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-agent}:${POSTGRES_PASSWORD:-agent}@db:5432/${POSTGRES_DB:-incidents}
+      CORS_ORIGINS: http://localhost:5173
+      CONFIDENCE_AUTO_THRESHOLD: ${CONFIDENCE_AUTO_THRESHOLD:-0.85}
+      CONFIDENCE_INVESTIGATE_THRESHOLD: ${CONFIDENCE_INVESTIGATE_THRESHOLD:-0.60}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      SERVICENOW_MODE: ${SERVICENOW_MODE:-mock}
+      SERVICENOW_INSTANCE_URL: ${SERVICENOW_INSTANCE_URL:-}
+      SERVICENOW_USERNAME: ${SERVICENOW_USERNAME:-}
+      SERVICENOW_PASSWORD: ${SERVICENOW_PASSWORD:-}
+      DASHBOARD_ADMIN_KEY: ${DASHBOARD_ADMIN_KEY:-}
+      DASHBOARD_VIEWER_KEY: ${DASHBOARD_VIEWER_KEY:-}
+    ports: ["8000:8000"]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: unless-stopped
+  web:
+    build: ./frontend
+    environment:
+      VITE_API_BASE: http://localhost:8000/api
+    ports: ["5173:5173"]
+    depends_on: [api]
+    restart: unless-stopped
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent}
+      POSTGRES_DB: ${POSTGRES_DB:-incidents}
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agent} -d ${POSTGRES_DB:-incidents}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+volumes:
+  postgres_data:
