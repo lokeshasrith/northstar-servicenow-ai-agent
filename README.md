@@ -61,6 +61,7 @@ Copy `.env.example` to `.env`. Defaults select the mock LLM and mock ServiceNow,
 - Dashboard queue comes from the API and opens details for original description, decision explanation, confidence, retrieved sources, actions, escalation notes, timeline, and audit events.
 - All six dashboard sections are navigable and API-backed: Overview, Agent activity, Knowledge base, Approvals, Evaluations, and Settings. Queue search, status/priority/category filters, sorting, paging, manual refresh, and the seven-second visible-tab refresh are interactive.
 - Create and analyze incidents, reprocess, escalate, request allowlisted actions, record separate-operator approvals, edit status/assignment/work notes, search local runbooks, view evaluation results, and operate ServiceNow mock sync/retry from the dashboard.
+- Public Test Drive lets any visitor submit a fictional incident or choose a recovery/escalation example, run the mock agent, and inspect its classification, runbook evidence, simulated verification, or human escalation. Entries are stored in the shared public queue; use fictional, anonymized details only.
 - Basic request throttling and optional API-key roles. The UI never displays private chain-of-thought.
 
 ## Safety and demo limits
