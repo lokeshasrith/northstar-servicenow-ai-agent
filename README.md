@@ -19,6 +19,8 @@ Northstar demonstrates an end-to-end incident workflow: classify and prioritize 
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/lokeshasrith/northstar-servicenow-ai-agent)
 
+**Open the live demo:** [northstar-incident-agent.onrender.com](https://northstar-incident-agent.onrender.com) · [API health](https://northstar-incident-agent.onrender.com/api/health)
+
 The included [`render.yaml`](render.yaml) deploys the dashboard and API together as one web service, with PostgreSQL for storage. It enables `PUBLIC_DEMO_MODE`, which rejects real LLM or ServiceNow credentials and keeps both integrations mocked. The public demo is interactive and its sample queue is shared with other visitors; do not enter real or sensitive incident data.
 
 This blueprint uses Render's free web and database plans. Free web services sleep after 15 minutes without traffic, so the first visit after idle may take about a minute to load. The free PostgreSQL instance expires after 30 days, has no backups, and its stored demo data will be deleted after the expiration grace period unless upgraded. These plans are intended for demos, not production. [Render free plan limits](https://render.com/docs/free).
