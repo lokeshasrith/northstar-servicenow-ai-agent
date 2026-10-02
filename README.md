@@ -3,6 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/UI-React%20%2B%20TypeScript-3178C6?logo=typescript&logoColor=white)
+![CI](https://github.com/lokeshasrith/northstar-servicenow-ai-agent/actions/workflows/ci.yml/badge.svg)
 
 A local, human-supervised incident triage demo with a React operations dashboard, FastAPI orchestration API, PostgreSQL persistence, a ServiceNow adapter, source-attributed knowledge retrieval, deterministic safety policy, approval-gated actions, and auditable decisions.
 
@@ -13,6 +14,14 @@ Northstar demonstrates an end-to-end incident workflow: classify and prioritize 
 **Resume bullet:** Built a human-in-the-loop ServiceNow incident triage platform with a React/TypeScript dashboard and FastAPI backend; implemented source-attributed runbook retrieval, deterministic severity and escalation policies, approval-gated remediation workflows, auditable incident timelines, and a mock/real ServiceNow Table API adapter.
 
 **Project highlights:** 10 automated backend checks; 11 hand-labeled evaluation examples; Docker Compose setup for PostgreSQL and the dashboard; API reference generated from FastAPI. The included evaluation is a small deterministic demo, not a claim of production model performance. See [evaluation results and caveats](docs/evaluation-report.md).
+
+## Deploy a live portfolio demo
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/lokeshasrith/northstar-servicenow-ai-agent)
+
+The included [`render.yaml`](render.yaml) deploys the dashboard and API together as one web service, with PostgreSQL for storage. It enables `PUBLIC_DEMO_MODE`, which rejects real LLM or ServiceNow credentials and keeps both integrations mocked. The public demo is interactive and its sample queue is shared with other visitors; do not enter real or sensitive incident data.
+
+This blueprint uses Render's free web and database plans. Free web services sleep after 15 minutes without traffic, so the first visit after idle may take about a minute to load. The free PostgreSQL instance expires after 30 days, has no backups, and its stored demo data will be deleted after the expiration grace period unless upgraded. These plans are intended for demos, not production. [Render free plan limits](https://render.com/docs/free).
 
 ## Run the full stack
 
@@ -35,6 +44,7 @@ Copy `.env.example` to `.env`. Defaults select the mock LLM and mock ServiceNow,
 - `CONFIDENCE_AUTO_THRESHOLD` and `CONFIDENCE_INVESTIGATE_THRESHOLD` tune the decision gates.
 - `LLM_PROVIDER=mock|openai`; the OpenAI adapter needs `OPENAI_API_KEY` and optionally `OPENAI_MODEL`. LLM output remains a suggestion validated by deterministic policy.
 - `SERVICENOW_MODE=mock|real`; real mode needs the instance URL, username, and password. Use a dedicated least-privilege developer instance account and keep credentials outside source control.
+- `PUBLIC_DEMO_MODE=true` is for a public, simulated demo only. It requires mock providers and rejects provider credentials and dashboard keys.
 - `DASHBOARD_ADMIN_KEY` enables write access with an API key; `DASHBOARD_VIEWER_KEY` is read-only. The development default leaves authentication off; configure keys before exposing the API.
 - Compose uses PostgreSQL. `DATABASE_URL` can be set for direct backend operation, otherwise local development uses SQLite.
 

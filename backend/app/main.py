@@ -1,11 +1,13 @@
 import asyncio
 import hmac
 import time
+from pathlib import Path
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from app.api.health import router as health_router
 from app.api.incidents import router as incident_router
 from app.api.misc import router as misc_router
@@ -75,3 +77,8 @@ async def security_controls(request:Request,call_next):
 
 @app.get("/")
 def root(): return {"name":settings.app_name,"docs":"/docs","phase":"complete demo","mode":settings.llm_provider}
+
+static_dir = Path(__file__).resolve().parents[2] / "static"
+if static_dir.is_dir():
+    app.router.routes.remove(next(route for route in app.router.routes if getattr(route, "path", None) == "/"))
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")

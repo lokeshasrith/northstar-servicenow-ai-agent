@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 
 const timeline=[['09:42:18','Incident received from ServiceNow','neutral'],['09:42:19','Classified as Network · VPN','blue'],['09:42:20','Priority calculated · P2','blue'],['09:42:21','Confidence assessed · 94%','green'],['09:42:22','VPN authentication runbook matched','purple'],['09:42:24','Connectivity check passed','green']];
 const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date()).toUpperCase();
-const API = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api';
+const API = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? 'http://localhost:8000/api' : '/api');
 async function apiFetch(url:string,init:RequestInit={}){const send=()=>{const headers=new Headers(init.headers);const key=localStorage.getItem('northstar-api-key');if(key)headers.set('X-API-Key',key);return window.fetch(url,{...init,headers})};let response=await send();if(response.status===401){const key=window.prompt('Enter your dashboard API key');if(key){localStorage.setItem('northstar-api-key',key);response=await send()}}return response}
 type Incident = {id:string;number:string;title:string;description:string;category:string;subcategory:string;priority:string;confidence:number;status:string;assigned_group:string;assigned_to:string;decision:Record<string,any>;knowledge:any[];actions:any[];timeline:any[];work_notes:string;created_at:string};
 
