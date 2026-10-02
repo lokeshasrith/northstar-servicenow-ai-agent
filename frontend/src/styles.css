@@ -62,3 +62,58 @@ button:disabled{cursor:not-allowed;opacity:.55}.nav-item{width:100%;border:0;bac
 .shell[data-theme="dark"] footer,.shell[data-theme="dark"] footer b{color:#97a4b8}
 
 @media(max-width:760px){.top-actions{gap:5px}.top-actions .utility-button{min-height:26px;padding:4px}.top-actions .theme-toggle span{display:none}.guide-modal{padding:20px 16px}.guide-links{flex-direction:column;gap:9px}}
+
+/* Lightweight motion gives the dashboard feedback without adding another runtime dependency. */
+@keyframes rise-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+@keyframes modal-enter{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes hero-glow{from{transform:translate3d(-10px,4px,0) scale(.92);opacity:.32}to{transform:translate3d(20px,-6px,0) scale(1.08);opacity:.68}}
+@keyframes live-pulse{0%,100%{box-shadow:0 0 0 0 #39b97a66}50%{box-shadow:0 0 0 5px #39b97a00}}
+@keyframes bar-rise{from{transform:scaleY(.12);opacity:.45}to{transform:scaleY(1);opacity:1}}
+@keyframes progress-enter{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes button-sheen{from{transform:translateX(-130%)}to{transform:translateX(220%)}}
+
+.shell{background-image:radial-gradient(ellipse at 83% 5%,#dfe8ff55 0,transparent 32%),linear-gradient(180deg,#f8faff 0,#f7f8fa 48%)}
+.shell[data-theme="dark"]{background-image:radial-gradient(ellipse at 82% 2%,#27355a55 0,transparent 34%),linear-gradient(180deg,#0f1728 0,#0c111b 75%)}
+.page-heading{position:relative;isolation:isolate}
+.page-heading:before{content:"";position:absolute;z-index:-1;pointer-events:none;width:270px;height:210px;right:8%;top:-115px;border-radius:50%;background:radial-gradient(ellipse,#879eff33 0,transparent 72%);filter:blur(13px);animation:hero-glow 11s ease-in-out infinite alternate}
+.content>section{animation:rise-in .48s cubic-bezier(.2,.72,.2,1) both}
+.content>section:nth-of-type(2){animation-delay:.04s}
+.content>section:nth-of-type(3){animation-delay:.08s}
+.content>section:nth-of-type(4){animation-delay:.12s}
+.metric-card{transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}
+.metric-card:hover{transform:translateY(-4px);border-color:#bfcdf4;box-shadow:0 12px 30px #344a7a14}
+.metric-card:nth-child(1){animation:rise-in .5s .04s both}
+.metric-card:nth-child(2){animation:rise-in .5s .1s both}
+.metric-card:nth-child(3){animation:rise-in .5s .16s both}
+.metric-card:nth-child(4){animation:rise-in .5s .22s both}
+.metric-icon{transition:transform .22s cubic-bezier(.2,.8,.2,1)}
+.metric-card:hover .metric-icon{transform:rotate(-7deg) scale(1.09)}
+.metric-progress i{transform-origin:left;animation:progress-enter .9s cubic-bezier(.2,.72,.2,1) both}
+.bars i{transform-origin:bottom;animation:bar-rise .55s cubic-bezier(.2,.72,.2,1) both}
+.bars i:nth-child(2){animation-delay:.04s}.bars i:nth-child(3){animation-delay:.08s}.bars i:nth-child(4){animation-delay:.12s}.bars i:nth-child(5){animation-delay:.16s}.bars i:nth-child(6){animation-delay:.2s}.bars i:nth-child(7){animation-delay:.24s}.bars i:nth-child(8){animation-delay:.28s}.bars i:nth-child(9){animation-delay:.32s}.bars i:nth-child(10){animation-delay:.36s}.bars i:nth-child(11){animation-delay:.4s}.bars i:nth-child(12){animation-delay:.44s}
+.confidence>div i{transition:width .7s cubic-bezier(.2,.72,.2,1)}
+.system-status i,.live-pill i{animation:live-pulse 2.6s ease-out infinite}
+.queue-card,.page-card,.activity-card,.safety-card{transition:border-color .2s ease,box-shadow .2s ease}
+.clickable td{transition:background-color .18s ease,border-color .18s ease}
+.clickable:hover td{background:#f5f7fc}
+.primary-button,.secondary-button,.utility-button,.support-card,.guardrail-button,.queue-actions button,.table-footer button,.nav-item,.text-button,.dots{transition:transform .16s ease,box-shadow .18s ease,background-color .18s ease,border-color .18s ease,color .18s ease}
+button:not(:disabled):active{transform:scale(.975)}
+.primary-button{position:relative;overflow:hidden}
+.primary-button:after{content:"";position:absolute;inset:0 auto 0 0;width:30%;background:linear-gradient(100deg,transparent,#ffffff50,transparent);transform:translateX(-130%);pointer-events:none}
+.primary-button:hover:after{animation:button-sheen .65s ease-out}
+.primary-button:hover:not(:disabled){box-shadow:0 7px 18px #4669d54a;transform:translateY(-1px)}
+.secondary-button:hover:not(:disabled),.utility-button:hover,.queue-actions button:hover:not(:disabled),.table-footer button:hover:not(:disabled),.support-card:hover,.guardrail-button:hover,.dots:hover{transform:translateY(-1px);box-shadow:0 5px 14px #293b6315}
+.nav-item:hover{transform:translateX(2px)}
+.event-row{transition:background-color .18s ease,transform .18s ease}
+.event-row:hover{transform:translateX(3px)}
+.detail-backdrop{animation:fade-in .18s ease both}
+.detail-panel,.form-modal,.guide-modal{animation:modal-enter .28s cubic-bezier(.2,.72,.2,1) both}
+.success-banner,.api-error{animation:rise-in .28s cubic-bezier(.2,.72,.2,1) both}
+.profile-tag{margin-left:auto;padding:4px 6px;border:1px solid #e6e9f0;border-radius:5px;color:#8992a0;font-size:7px;font-weight:800;letter-spacing:.6px}
+.shell[data-theme="dark"] .profile-tag{border-color:#35435a;color:#9eabc1}
+.shell[data-theme="dark"] .clickable:hover td{background:#1a2639}
+.shell[data-theme="dark"] .metric-card:hover{border-color:#465a81;box-shadow:0 12px 32px #0004}
+.shell[data-theme="dark"] .page-heading:before{background:radial-gradient(ellipse,#6e87e755 0,transparent 72%)}
+
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
