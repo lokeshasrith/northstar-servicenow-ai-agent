@@ -1,16 +1,276 @@
-import { Activity, ArrowDownUp, ArrowRight, Bell, Bot, CheckCircle2, ChevronDown, CircleHelp, Command, Database, Filter, Gauge, Headphones, LayoutDashboard, ListFilter, LockKeyhole, MoreHorizontal, Plus, Search, Settings2, ShieldAlert, Sparkles, Timer, Wifi, Zap } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+  Activity, ArrowDownUp, ArrowRight, Bell, BookOpen, Bot, CheckCircle2, ChevronDown,
+  CircleHelp, Command, Database, Filter, Gauge, Headphones, LayoutDashboard, LockKeyhole,
+  MoreHorizontal, Plus, RefreshCw, Search, Settings2, ShieldAlert, Sparkles, Timer,
+  Wifi, X, Zap,
+} from 'lucide-react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
-const timeline=[['09:42:18','Incident received from ServiceNow','neutral'],['09:42:19','Classified as Network · VPN','blue'],['09:42:20','Priority calculated · P2','blue'],['09:42:21','Confidence assessed · 94%','green'],['09:42:22','VPN authentication runbook matched','purple'],['09:42:24','Connectivity check passed','green']];
+type Incident = {
+  id: string; number: string; servicenow_sys_id: string; servicenow_sync_status: string;
+  title: string; description: string; category: string; subcategory: string; priority: string;
+  confidence: number; status: string; assigned_group: string; assigned_to: string;
+  decision: Record<string, any>; knowledge: any[]; actions: any[]; timeline: any[];
+  work_notes: string; created_at: string; updated_at: string;
+};
+type Page = 'Overview' | 'Agent activity' | 'Knowledge base' | 'Approvals' | 'Evaluations' | 'Settings';
+type KnowledgeResult = { id: string; title: string; source: string; category: string; snippet: string; score: number };
+type ActionSpec = { name: string; description: string; risk: string; approval: boolean; category: string; validation: string };
+
+const API = (import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? 'http://localhost:8000/api' : '/api')).replace(/\/$/, '');
+const NAV: { label: Page; icon: typeof LayoutDashboard }[] = [
+  { label: 'Overview', icon: LayoutDashboard }, { label: 'Agent activity', icon: Activity },
+  { label: 'Knowledge base', icon: Database }, { label: 'Approvals', icon: ShieldAlert },
+  { label: 'Evaluations', icon: Gauge }, { label: 'Settings', icon: Settings2 },
+];
 const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date()).toUpperCase();
-const API = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? 'http://localhost:8000/api' : '/api');
-async function apiFetch(url:string,init:RequestInit={}){const send=()=>{const headers=new Headers(init.headers);const key=localStorage.getItem('northstar-api-key');if(key)headers.set('X-API-Key',key);return window.fetch(url,{...init,headers})};let response=await send();if(response.status===401){const key=window.prompt('Enter your dashboard API key');if(key){localStorage.setItem('northstar-api-key',key);response=await send()}}return response}
-type Incident = {id:string;number:string;title:string;description:string;category:string;subcategory:string;priority:string;confidence:number;status:string;assigned_group:string;assigned_to:string;decision:Record<string,any>;knowledge:any[];actions:any[];timeline:any[];work_notes:string;created_at:string};
 
-export default function App(){const [incidents,setIncidents]=useState<Incident[]>([]);const [selected,setSelected]=useState<Incident|null>(null);const [audit,setAudit]=useState<any[]>([]);const [policy,setPolicy]=useState<any|null>(null);const [error,setError]=useState('');const [busy,setBusy]=useState(false);const resolvedCount=incidents.filter(x=>x.status==='Resolved').length;const reviewCount=incidents.filter(x=>x.status==='Human review'||x.status==='Escalated').length;const meanConfidence=incidents.length?Math.round(incidents.reduce((n,x)=>n+x.confidence,0)/incidents.length*100):0;const active=selected||incidents[0];const liveTimeline=active?.timeline?.slice(-6).map((e:any)=>[new Date(e.timestamp).toLocaleTimeString(),e.event.replaceAll('_',' '),'blue'])||[];const refresh=async()=>{try{const r=await apiFetch(`${API}/incidents`);if(!r.ok)throw new Error(`API returned ${r.status}`);setIncidents(await r.json());setError('')}catch(e){setError(`Backend unavailable: ${String(e)}`)}};useEffect(()=>{void refresh();void apiFetch(`${API}/config`).then(r=>r.json()).then(setPolicy).catch(()=>{})},[]);const open=async(x:Incident)=>{setSelected(x);try{const [d,a]=await Promise.all([apiFetch(`${API}/incidents/${x.id}`).then(r=>r.json()),apiFetch(`${API}/incidents/${x.id}/audit`).then(r=>r.json())]);setSelected(d);setAudit(a)}catch{setAudit([])}};const create=async()=>{const title=window.prompt('Incident title');if(!title)return;const description=window.prompt('Describe the issue');if(!description)return;setBusy(true);try{const created=await apiFetch(`${API}/incidents`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,description})}).then(r=>r.json());await apiFetch(`${API}/incidents/${created.id}/process`,{method:'POST'});await refresh()}finally{setBusy(false)}};const processSelected=async()=>{if(!selected)return;setBusy(true);try{await apiFetch(`${API}/incidents/${selected.id}/process`,{method:'POST'});await refresh();const fresh=incidents.find(x=>x.id===selected.id);if(fresh)await open(fresh)}finally{setBusy(false)}};const escalateSelected=async()=>{if(!selected)return;const reason=window.prompt('Escalation reason');if(!reason)return;await apiFetch(`${API}/incidents/${selected.id}/escalate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason})});await refresh()};const approveSelected=async()=>{if(!selected)return;const name=window.prompt('Approver name');if(!name)return;await apiFetch(`${API}/incidents/${selected.id}/approve-action`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approved_by:name})});await refresh();await open(selected)};const requestAction=async(action:string)=>{if(!selected)return;const requested_by=window.prompt('Requesting operator name');if(!requested_by)return;await apiFetch(`${API}/incidents/${selected.id}/actions`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,requested_by})});await refresh();await open(selected)};return <div className="shell"><aside className="sidebar"><div className="brand"><div className="brandmark"><Command size={18}/></div><div><b>northstar</b><span>IT OPERATIONS</span></div><ChevronDown size={14} className="brand-chevron"/></div><div className="workspace"><i/> ACME CORPORATION <ChevronDown size={13}/></div><div className="side-label">WORKSPACE</div><nav><a className="nav-item active"><LayoutDashboard/> Overview <span className="nav-count">{incidents.length}</span></a><a className="nav-item"><Activity/> Agent activity</a><a className="nav-item"><Database/> Knowledge base</a><a className="nav-item"><ShieldAlert/> Approvals <span className="nav-badge">{incidents.filter(x=>x.actions.some(a=>a.status==='approval_required')).length}</span></a></nav><div className="side-label systems-label">SYSTEM</div><nav><a className="nav-item"><Gauge/> Evaluations</a><a className="nav-item"><Settings2/> Settings</a></nav><div className="sidebar-bottom"><div className="support-card"><CircleHelp/><div><b>Need a hand?</b><span>Visit the help center</span></div><ArrowRight/></div><div className="profile"><div className="avatar profile-avatar">JD</div><div className="profile-copy"><b>Jordan Davis</b><span>IT Administrator</span></div><MoreHorizontal/></div></div></aside>
-<main className="main"><header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><b>Overview</b></div><div className="top-actions"><div className="system-status"><i/> {error?'API connection needs attention':'Backend connected'}</div><button><Search/></button><button className="has-dot"><Bell/></button><div className="avatar top-avatar">JD</div></div></header><div className="content"><section className="page-heading"><div><div className="eyebrow"><i/> {today}</div><h1>Good morning, Jordan <span>✳</span></h1><p>Here's what's happening across your incident queue today.</p></div><button className="primary-button" onClick={create} disabled={busy}><Plus/> Create incident</button></section>
-<section className="metrics"><Metric title="Open incidents" value={String(incidents.length-resolvedCount)} change="live" foot="persisted in this workspace" icon={<Activity/>} tone="blue" chart="spark"/><Metric title="Resolved in simulation" value={String(resolvedCount)} change="demo only" foot="mock verification; no real systems changed" icon={<Sparkles/>} tone="green" chart="spark"/><Metric title="Human review" value={String(reviewCount)} change="escalated or held" foot="requires support team action" icon={<Headphones/>} tone="amber" chart="progress"/><Metric title="Mean confidence" value={`${meanConfidence}%`} change="current sample" foot="confidence from incident assessments" icon={<Timer/>} tone="purple" chart="bars"/></section>
-<section className="queue-card"><div className="section-heading"><div><h2>Incident queue <span className="sub-count">{incidents.length}</span></h2><p>Review and manage incoming incidents</p></div><div className="queue-actions"><button><ListFilter/> Filters</button><button><ArrowDownUp/> Priority <ChevronDown/></button><button className="dots"><MoreHorizontal/></button></div></div>{error&&<div className="api-error">{error}. Start the API using Docker Compose or `uvicorn app.main:app --reload`.</div>}<div className="table-wrap"><table><thead><tr><th><input type="checkbox"/></th><th>INCIDENT <ArrowDownUp/></th><th>CATEGORY</th><th>PRIORITY</th><th>AI CONFIDENCE</th><th>STATUS</th><th>ASSIGNED TO</th><th/></tr></thead><tbody>{incidents.map(x=>{const tone=x.status==='Escalated'?'red':x.status==='Human review'?'amber':x.status==='Resolved'?'green':'blue';const icon=x.category.toLowerCase().includes('vpn')?'vpn':x.category.toLowerCase().includes('access')?'lock':x.category.toLowerCase().includes('software')?'mail':'globe';return <tr key={x.id} onClick={()=>void open(x)} className="clickable"><td><input type="checkbox"/></td><td><div className="incident-title"><div className={`ticket-icon ${icon}`}>{icon==='vpn'?<Wifi/>:icon==='lock'?<LockKeyhole/>:icon==='mail'?<Bot/>:<Activity/>}</div><div><b>{x.title}</b><span>{x.number} <i>·</i> {new Date(x.created_at).toLocaleTimeString()}</span></div></div></td><td>{x.category} · {x.subcategory}</td><td><span className={`priority ${x.priority.toLowerCase()}`}><i/>{x.priority}</span></td><td><div className="confidence"><div><i className={tone} style={{width:`${Math.round(x.confidence*100)}%`}}/></div><span>{Math.round(x.confidence*100)}%</span></div></td><td><span className={`status ${x.status.toLowerCase().replace(' ','-')}`}><i/>{x.status}</span></td><td><div className="assignee"><span className={`avatar avatar-${tone}`}>{x.assigned_group.slice(0,2).toUpperCase()}</span>{x.assigned_group}</div></td><td><button className="dots"><MoreHorizontal/></button></td></tr>})}</tbody></table></div><div className="table-footer"><span>Showing <b>{incidents.length}</b> persisted incidents</span><div><button disabled>Previous</button><button disabled>Next <ArrowRight/></button></div></div></section>
-<section className="bottom-grid"><div className="activity-card"><div className="card-title-row"><div><h2>Agent activity</h2><p>Live decisions and actions</p></div><button className="text-button">View all <ArrowRight/></button></div><div className="activity-incident"><div className="activity-symbol"><Wifi/></div><div><b>{active?.number||"No incidents yet"} <i>·</i> {active?.title||"Create an incident to begin"}</b><span>{active?.status||"Waiting"} · {active?`${Math.round(active.confidence*100)}% confidence`:""}</span></div><span className="live-pill"><i/> LIVE</span></div><div className="timeline">{liveTimeline.map(([time,label,color])=><div className="timeline-row" key={time}><time>{time}</time><i className={color}/><span>{label}</span></div>)}</div><div className="timeline-current"><Zap/> {active?.decision?.escalation_reason||active?.decision?.recommended_action||"No active analysis"}</div></div><div className="safety-card"><div className="card-title-row"><div><h2>Safety overview</h2><p>Your guardrails at a glance</p></div><button className="dots"><MoreHorizontal/></button></div><div className="safety-score"><div className="score-ring"><b>✓<small>ON</small></b></div><div><b>Human oversight enforced</b><span>Policy configuration loaded</span></div><CheckCircle2/></div><div className="guardrail-list"><div><span><i/>Confidence threshold</span><b>≥ {Math.round((policy?.confidence_auto_threshold??0.85)*100)}%</b></div><div><span><i/>Human approval required</span><b>3 action types</b></div><div><span><i/>Knowledge sources verified</span><b>{policy?.knowledge_sources??10} runbooks</b></div></div><button className="guardrail-button"><LockKeyhole/> View safety policies <ArrowRight/></button></div></section><footer><span>Northstar AI <b>v0.2.0</b> · Development environment</span><span><i/> ServiceNow adapter: {policy?.servicenow_mode||"mock"} <i>·</i> API-backed queue</span></footer></div></main>{selected&&<div className="detail-backdrop" onClick={()=>setSelected(null)}><section className="detail-panel" onClick={e=>e.stopPropagation()}><button className="detail-close" onClick={()=>setSelected(null)}>Close</button><div className="eyebrow">INCIDENT DETAIL · {selected.number}</div><h2>{selected.title}</h2><p>{selected.description}</p><div className="detail-stats"><span><b>{selected.priority}</b> Priority</span><span><b>{Math.round(selected.confidence*100)}%</b> Confidence</span><span><b>{selected.status}</b> Status</span><span><b>{selected.assigned_group}</b> Assignment group</span></div><h3>Decision explanation</h3><p>{selected.decision.decision_explanation||selected.decision.escalation_reason||"Not analyzed yet."}</p><h3>Knowledge sources</h3>{selected.knowledge.map(k=><div className="detail-item" key={k.id}><b>{k.title}</b><span>{k.source} · relevance {k.score}</span></div>)}<h3>Actions & verification</h3>{selected.actions.map((a,i)=><div className="detail-item" key={i}><b>{a.name} · {a.status}</b><span>{a.result}</span>{a.status==="approval_required"&&<button className="secondary-button" onClick={()=>void approveSelected()}>Approve action</button>}</div>)}{selected.decision.verification&&<p>{selected.decision.verification.message}</p>}<h3>Activity & audit</h3>{audit.map(a=><div className="detail-item" key={a.id}><b>{a.event}</b><span>{new Date(a.timestamp).toLocaleString()}</span></div>)}<div className="detail-actions"><button className="secondary-button" onClick={()=>void processSelected()} disabled={busy}>Process incident</button><button className="primary-button" onClick={()=>void escalateSelected()}>Escalate to human</button></div><div className="detail-actions">{selected.category==="Software"&&<button className="secondary-button" onClick={()=>void requestAction('clear_cache')}>Request cache clear · approval</button>}{selected.category==="Authentication"&&<button className="secondary-button" onClick={()=>void requestAction('reset_session')}>Request session reset · approval</button>}<button className="secondary-button" onClick={()=>void requestAction('restart_service')}>Request service restart · approval</button></div><h3>AI work notes</h3><pre>{selected.work_notes||"No escalation notes."}</pre></section></div>}</div>}
+async function request<T = any>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set('Accept', 'application/json');
+  headers.set('Content-Type', 'application/json');
+  const key = localStorage.getItem('northstar-api-key');
+  if (key) headers.set('X-API-Key', key);
+  let response: Response;
+  try { response = await fetch(`${API}${path}`, { ...init, headers }); }
+  catch { throw new Error('Could not reach the API. Check the deployment health and try again.'); }
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`;
+    try { const body = await response.json(); message = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail ?? body); } catch { /* keep status */ }
+    throw new Error(message);
+  }
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+}
 
-function Metric({title,value,change,foot,icon,tone,chart,unit}:{title:string;value:string;change:string;foot:string;icon:React.ReactNode;tone:string;chart:string;unit?:string}){return <div className="metric-card"><div className="metric-top"><span>{title}</span><div className={`metric-icon ${tone}`}>{icon}</div></div><div className="metric-value">{value} {unit&&<small>{unit}</small>} <span className={tone==='amber'?'warning':'positive'}>{change}</span></div><div className="metric-foot">{foot}</div>{chart==='spark'?<div className={`sparkline ${tone}`}><svg viewBox="0 0 100 28" preserveAspectRatio="none"><path d="M0 21 C10 19 12 22 20 14 S32 20 40 13 50 17 58 9 69 15 77 8 89 10 100 3"/></svg></div>:chart==='progress'?<div className="metric-progress"><i/></div>:<div className="bars">{Array.from({length:12},(_,i)=><i key={i}/>)}</div>}</div>}
+function friendlyError(error: unknown) { return error instanceof Error ? error.message : 'Something went wrong. Please try again.'; }
+function formatTime(value?: string) { return value ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'; }
+function percent(value?: number) { return `${Math.round((value || 0) * 100)}%`; }
+
+export default function App() {
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [selected, setSelected] = useState<Incident | null>(null);
+  const [audit, setAudit] = useState<any[]>([]);
+  const [policy, setPolicy] = useState<any>(null);
+  const [actions, setActions] = useState<ActionSpec[]>([]);
+  const [evaluation, setEvaluation] = useState<any>(null);
+  const [knowledge, setKnowledge] = useState<KnowledgeResult[]>([]);
+  const [knowledgeQuery, setKnowledgeQuery] = useState('');
+  const [knowledgeSearched, setKnowledgeSearched] = useState(false);
+  const [page, setPage] = useState<Page>('Overview');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('All statuses');
+  const [priorityFilter, setPriorityFilter] = useState('All priorities');
+  const [categoryFilter, setCategoryFilter] = useState('All categories');
+  const [sort, setSort] = useState<'priority' | 'newest' | 'oldest'>('priority');
+  const [pageIndex, setPageIndex] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailAction, setDetailAction] = useState('');
+  const [operatorName, setOperatorName] = useState('Jordan Davis');
+  const [actionOperator, setActionOperator] = useState('Jordan Davis');
+  const [escalationReason, setEscalationReason] = useState('Needs support team investigation');
+  const [assignmentGroup, setAssignmentGroup] = useState('');
+  const [workNotes, setWorkNotes] = useState('');
+  const [createForm, setCreateForm] = useState({ title: '', description: '', affected_users: 1, business_criticality: 2, service: '' });
+  const [createError, setCreateError] = useState('');
+  const [servicenowResult, setServicenowResult] = useState('');
+
+  const refresh = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
+    try {
+      const rows = await request<Incident[]>('/incidents');
+      setIncidents(rows);
+      setSelected(current => current ? (rows.find(x => x.id === current.id) || null) : null);
+      setLastUpdated(new Date());
+      setError('');
+      return rows;
+    } catch (e) { setError(friendlyError(e)); return null; }
+    finally { if (showLoading) setLoading(false); }
+  }, []);
+
+  const loadPolicy = useCallback(async () => {
+    try {
+      const [config, registry] = await Promise.all([request('/config'), request<Record<string, ActionSpec>>('/actions')]);
+      setPolicy(config);
+      setActions(Object.values(registry));
+    } catch (e) { setError(friendlyError(e)); }
+  }, []);
+
+  useEffect(() => {
+    void refresh(true);
+    void loadPolicy();
+    const poll = window.setInterval(() => { if (document.visibilityState === 'visible') void refresh(); }, 7000);
+    const onFocus = () => { if (document.visibilityState === 'visible') void refresh(); };
+    document.addEventListener('visibilitychange', onFocus);
+    window.addEventListener('focus', onFocus);
+    return () => { window.clearInterval(poll); document.removeEventListener('visibilitychange', onFocus); window.removeEventListener('focus', onFocus); };
+  }, [refresh, loadPolicy]);
+
+  useEffect(() => {
+    if (page === 'Evaluations' && !evaluation) request('/evaluation').then(setEvaluation).catch(e => setError(friendlyError(e)));
+  }, [page, evaluation]);
+
+  const withBusy = async (work: () => Promise<void>, success?: string) => {
+    setBusy(true); setError(''); setNotice('');
+    try { await work(); if (success) setNotice(success); }
+    catch (e) { setError(friendlyError(e)); }
+    finally { setBusy(false); }
+  };
+
+  const openIncident = async (item: Incident) => {
+    setSelected(item); setDetailAction(''); setAssignmentGroup(item.assigned_group); setWorkNotes(item.work_notes || '');
+    try {
+      const [fresh, events] = await Promise.all([request<Incident>(`/incidents/${item.id}`), request<any[]>(`/incidents/${item.id}/audit`)]);
+      setSelected(fresh); setAudit(events);
+    } catch (e) { setError(friendlyError(e)); }
+  };
+
+  const doCreate = async (event: FormEvent) => {
+    event.preventDefault(); setCreateError(''); setError(''); setBusy(true);
+    try {
+      const created = await request<Incident>('/incidents', { method: 'POST', body: JSON.stringify(createForm) });
+      const processed = await request<Incident>(`/incidents/${created.id}/process`, { method: 'POST' });
+      await refresh(); setCreateOpen(false); setCreateForm({ title: '', description: '', affected_users: 1, business_criticality: 2, service: '' });
+      setSelected(processed); setPage('Overview'); setNotice('Incident created and analyzed.');
+    } catch (e) { setCreateError(friendlyError(e)); await refresh(); }
+    finally { setBusy(false); }
+  };
+
+  const processSelected = async () => {
+    if (!selected) return;
+    await withBusy(async () => { const fresh = await request<Incident>(`/incidents/${selected.id}/process`, { method: 'POST' }); await refresh(); await openIncident(fresh); }, 'Incident analysis complete.');
+  };
+  const escalateSelected = async () => {
+    if (!selected) return;
+    await withBusy(async () => { const fresh = await request<Incident>(`/incidents/${selected.id}/escalate`, { method: 'POST', body: JSON.stringify({ reason: escalationReason, assignment_group: assignmentGroup || null }) }); await refresh(); await openIncident(fresh); setDetailAction(''); }, 'Incident escalated for human review.');
+  };
+  const approve = async (item: Incident) => {
+    await withBusy(async () => { await request(`/incidents/${item.id}/approve-action`, { method: 'POST', body: JSON.stringify({ approved_by: operatorName }) }); await refresh(); if (selected?.id === item.id) await openIncident(item); }, 'Approval recorded. The action was simulated; a human must verify the incident.');
+  };
+  const requestAction = async () => {
+    if (!selected || !detailAction) return;
+    await withBusy(async () => { const fresh = await request<Incident>(`/incidents/${selected.id}/actions`, { method: 'POST', body: JSON.stringify({ action: detailAction, requested_by: actionOperator }) }); await refresh(); await openIncident(fresh); }, 'Action request recorded in the audit log.');
+  };
+  const saveIncident = async (fields: Record<string, string>, message: string) => {
+    if (!selected) return;
+    await withBusy(async () => { const fresh = await request<Incident>(`/incidents/${selected.id}`, { method: 'PATCH', body: JSON.stringify(fields) }); await refresh(); await openIncident(fresh); }, message);
+  };
+
+  const openView = (next: Page) => { setPage(next); setPageIndex(0); setError(''); };
+  const active = selected || incidents[0];
+  const openCount = incidents.filter(x => !['Resolved', 'Closed'].includes(x.status)).length;
+  const resolvedCount = incidents.filter(x => x.status === 'Resolved').length;
+  const reviewCount = incidents.filter(x => ['Human review', 'Escalated'].includes(x.status)).length;
+  const meanConfidence = incidents.length ? Math.round(incidents.reduce((sum, x) => sum + x.confidence, 0) / incidents.length * 100) : 0;
+  const reviewRate = incidents.length ? reviewCount / incidents.length : 0;
+  const confidenceSeries = incidents.slice(0, 12).map(x => x.confidence);
+  const approvalCount = incidents.reduce((n, x) => n + x.actions.filter(a => a.status === 'approval_required').length, 0);
+  const statuses = useMemo(() => ['All statuses', ...Array.from(new Set(incidents.map(x => x.status))).sort()], [incidents]);
+  const categories = useMemo(() => ['All categories', ...Array.from(new Set(incidents.map(x => x.category))).sort()], [incidents]);
+  const filteredIncidents = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const rows = incidents.filter(x => (statusFilter === 'All statuses' || x.status === statusFilter)
+      && (priorityFilter === 'All priorities' || x.priority === priorityFilter)
+      && (categoryFilter === 'All categories' || x.category === categoryFilter)
+      && (!q || [x.number, x.title, x.description, x.category, x.subcategory, x.assigned_group].some(v => v?.toLowerCase().includes(q))));
+    const weight: Record<string, number> = { P1: 1, P2: 2, P3: 3, P4: 4 };
+    return rows.sort((a, b) => sort === 'priority' ? (weight[a.priority] ?? 9) - (weight[b.priority] ?? 9) || b.created_at.localeCompare(a.created_at) : sort === 'newest' ? b.created_at.localeCompare(a.created_at) : a.created_at.localeCompare(b.created_at));
+  }, [incidents, statusFilter, priorityFilter, categoryFilter, search, sort]);
+  const pageSize = 8;
+  const visibleIncidents = filteredIncidents.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
+  const pendingApprovals = incidents.flatMap(item => item.actions.some(a => a.status === 'approval_required') ? [{ ...item, pending: item.actions.filter(a => a.status === 'approval_required') }] : []);
+  const allTimeline = incidents.flatMap(item => (item.timeline || []).map((event: any, index: number) => ({ ...event, incident: item, key: `${item.id}-${index}` }))).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 60);
+  const matchingActions = selected ? actions.filter(a => a.category === '*' || a.category === selected.category) : [];
+  const activeTitle = page === 'Overview' ? 'Overview' : page;
+
+  const runKnowledgeSearch = async (event: FormEvent) => {
+    event.preventDefault(); if (knowledgeQuery.trim().length < 2) { setError('Enter at least two characters to search the runbooks.'); return; }
+    await withBusy(async () => { const result = await request<{ results: KnowledgeResult[] }>(`/knowledge/search?q=${encodeURIComponent(knowledgeQuery.trim())}&limit=10`); setKnowledge(result.results); setKnowledgeSearched(true); }, 'Knowledge search complete.');
+  };
+  const syncServiceNow = async () => await withBusy(async () => { const result = await request<any>('/servicenow/sync', { method: 'POST' }); setServicenowResult(`Fetched ${result.fetched}; imported ${result.imported}; updated ${result.updated}; failed ${result.failed}.`); await refresh(); }, 'ServiceNow sync finished.');
+  const retryPending = async () => await withBusy(async () => { const result = await request<any>('/servicenow/retry-pending', { method: 'POST' }); setServicenowResult(`Retried ${result.retried}; succeeded ${result.succeeded}; failed ${result.failed}.`); await refresh(); }, 'Pending sync retry finished.');
+
+  const navLink = (label: Page, icon: typeof LayoutDashboard) => {
+    const Icon = icon;
+    return <button className={`nav-item ${page === label ? 'active' : ''}`} key={label} onClick={() => openView(label)}><Icon/>{label}{label === 'Overview' && <span className="nav-count">{incidents.length}</span>}{label === 'Approvals' && <span className="nav-badge">{approvalCount}</span>}</button>;
+  };
+
+  return <div className="shell">
+    <aside className="sidebar">
+      <div className="brand"><div className="brandmark"><Command size={18}/></div><div><b>northstar</b><span>IT OPERATIONS</span></div></div>
+      <div className="workspace"><i/> ACME CORPORATION</div>
+      <div className="side-label">WORKSPACE</div><nav>{NAV.slice(0, 4).map(item => navLink(item.label, item.icon))}</nav>
+      <div className="side-label systems-label">SYSTEM</div><nav>{NAV.slice(4).map(item => navLink(item.label, item.icon))}</nav>
+      <div className="sidebar-bottom"><button className="support-card" onClick={() => openView('Settings')}><CircleHelp/><span><b>Need a hand?</b><small>Open system settings</small></span><ArrowRight/></button><div className="profile"><div className="avatar profile-avatar">JD</div><div className="profile-copy"><b>Jordan Davis</b><span>IT Administrator · demo</span></div><MoreHorizontal/></div></div>
+    </aside>
+
+    <main className="main"><header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span>/</span><b>{activeTitle}</b></div><div className="top-actions"><button className="refresh-top" onClick={() => void refresh(true)} title="Refresh now" disabled={busy}><RefreshCw className={loading ? 'spin' : ''}/></button><div className="system-status"><i className={error ? 'offline' : ''}/>{error ? 'API needs attention' : 'Backend connected'}<small>{lastUpdated ? `Updated ${formatTime(lastUpdated.toISOString())}` : ''}</small></div>{searchOpen && <input className="global-search" autoFocus placeholder="Search incidents…" value={search} onChange={e => { setSearch(e.target.value); setPage('Overview'); setPageIndex(0); }}/>}<button onClick={() => { setSearchOpen(x => !x); setSearch(''); }} title="Search incidents"><Search/></button><button className={approvalCount > 0 ? 'has-dot' : ''} onClick={() => openView('Approvals')} title={`${approvalCount} pending approvals`}><Bell/>{approvalCount > 0 && <span className="notification-count">{approvalCount}</span>}</button><div className="avatar top-avatar">JD</div></div></header>
+      <div className="content">
+        {error && <div className="api-error" role="alert"><span><b>Action needed:</b> {error}</span><button onClick={() => setError('')} aria-label="Dismiss error"><X size={15}/></button></div>}
+        {notice && <div className="success-banner" role="status"><CheckCircle2 size={15}/><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss message"><X size={15}/></button></div>}
+
+        {page === 'Overview' && <>
+          <section className="page-heading"><div><div className="eyebrow"><i/> {today}</div><h1>Good morning, Jordan <span>✳</span></h1><p>Live incident queue and agent decisions for this workspace.</p></div><button className="primary-button" onClick={() => { setCreateError(''); setCreateOpen(true); }} disabled={busy}><Plus/> Create incident</button></section>
+          <section className="metrics"><Metric title="Open incidents" value={String(openCount)} change="live queue" foot={`${incidents.length} persisted in this workspace`} icon={<Activity/>} tone="blue" chart="none"/><Metric title="Resolved in simulation" value={String(resolvedCount)} change="demo only" foot="mock verification; no real systems changed" icon={<Sparkles/>} tone="green" chart="none"/><Metric title="Human review" value={String(reviewCount)} change={`${Math.round(reviewRate * 100)}% of queue`} foot="escalated or held for support" icon={<Headphones/>} tone="amber" chart="progress" chartValue={reviewRate}/><Metric title="Mean confidence" value={`${meanConfidence}%`} change="current sample" foot="per-incident confidence, most recent 12" icon={<Timer/>} tone="purple" chart="bars" series={confidenceSeries}/></section>
+          <section className="queue-card"><div className="section-heading"><div><h2>Incident queue <span className="sub-count">{filteredIncidents.length}</span></h2><p>Automatically refreshes every 7 seconds while this page is open</p></div><div className="queue-actions"><button onClick={() => setFiltersOpen(x => !x)} className={filtersOpen ? 'selected-control' : ''}><Filter/> Filters {(statusFilter !== 'All statuses' || priorityFilter !== 'All priorities' || categoryFilter !== 'All categories') && <b>On</b>}</button><button onClick={() => setSort(current => current === 'priority' ? 'newest' : current === 'newest' ? 'oldest' : 'priority')} title="Cycle sorting"><ArrowDownUp/> {sort === 'priority' ? 'Priority' : sort === 'newest' ? 'Newest' : 'Oldest'} <ChevronDown/></button><button className="dots" onClick={() => void refresh(true)} title="Refresh incident list"><MoreHorizontal/></button></div></div>
+            {(filtersOpen || search) && <div className="filter-row"><label>Status<select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPageIndex(0); }}>{statuses.map(x => <option key={x}>{x}</option>)}</select></label><label>Priority<select value={priorityFilter} onChange={e => { setPriorityFilter(e.target.value); setPageIndex(0); }}>{['All priorities', 'P1', 'P2', 'P3', 'P4'].map(x => <option key={x}>{x}</option>)}</select></label><label>Category<select value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setPageIndex(0); }}>{categories.map(x => <option key={x}>{x}</option>)}</select></label>{search && <span className="filter-search-label">Search: “{search}”</span>}<button className="link-button" onClick={() => { setStatusFilter('All statuses'); setPriorityFilter('All priorities'); setCategoryFilter('All categories'); setSearch(''); }}>Clear filters</button></div>}
+            <div className="table-wrap"><table><thead><tr><th>INCIDENT</th><th>CATEGORY</th><th>PRIORITY</th><th>AI CONFIDENCE</th><th>STATUS</th><th>ASSIGNED TO</th><th/></tr></thead><tbody>{loading && !incidents.length ? <tr><td colSpan={7} className="empty-state">Loading incidents…</td></tr> : visibleIncidents.map(x => <IncidentRow key={x.id} incident={x} onOpen={() => void openIncident(x)}/>)}{!loading && !visibleIncidents.length && <tr><td colSpan={7} className="empty-state">{incidents.length ? 'No incidents match these filters.' : 'No incidents yet. Create one to start the agent workflow.'}</td></tr>}</tbody></table></div>
+            <div className="table-footer"><span>Showing <b>{visibleIncidents.length ? pageIndex * pageSize + 1 : 0}–{Math.min((pageIndex + 1) * pageSize, filteredIncidents.length)}</b> of <b>{filteredIncidents.length}</b> incidents</span><div><button onClick={() => setPageIndex(x => Math.max(0, x - 1))} disabled={pageIndex === 0}>Previous</button><button onClick={() => setPageIndex(x => x + 1)} disabled={(pageIndex + 1) * pageSize >= filteredIncidents.length}>Next <ArrowRight/></button></div></div>
+          </section>
+          <section className="bottom-grid"><ActivityCard active={active} events={active?.timeline || []} onViewAll={() => openView('Agent activity')}/><SafetyCard policy={policy} onOpen={() => openView('Settings')}/></section>
+          <footer><span>Northstar AI <b>v0.2.0</b> · Public mock demo</span><span><i/> ServiceNow adapter: {policy?.servicenow_mode || 'mock'} <i>·</i> {lastUpdated ? `Last refresh ${formatTime(lastUpdated.toISOString())}` : 'Connecting…'}</span></footer>
+        </>}
+
+        {page === 'Agent activity' && <PageHeading title="Agent activity" description="Persisted classification, decisions, escalations, and action events." action={<button className="secondary-button" onClick={() => void refresh(true)}><RefreshCw/> Refresh activity</button>}/>}
+        {page === 'Agent activity' && <section className="page-card"><div className="card-title-row"><div><h2>Recent event timeline</h2><p>Updates when the incident queue refreshes</p></div><span className="live-pill"><i/> LIVE</span></div>{allTimeline.length ? <div className="event-list">{allTimeline.map(event => <button className="event-row" key={event.key} onClick={() => void openIncident(event.incident)}><time>{new Date(event.timestamp).toLocaleString()}</time><i/><span><b>{event.event.replace(/_/g, ' ')}</b><small>{event.incident.number} · {event.incident.title}</small></span><ArrowRight/></button>)}</div> : <EmptyState title="No recorded activity" detail="Create or process an incident to populate this audit-backed feed."/>}</section>}
+
+        {page === 'Knowledge base' && <><PageHeading title="Knowledge base" description="Search the included runbooks used to ground incident recommendations."/><section className="page-card"><form className="knowledge-search" onSubmit={runKnowledgeSearch}><Search/><input value={knowledgeQuery} onChange={e => setKnowledgeQuery(e.target.value)} placeholder="Try “VPN connection”, “DNS”, or “account locked”…" minLength={2}/><button className="primary-button" disabled={busy}>Search runbooks</button></form><p className="muted-note">Knowledge results are local project runbooks; they are not fetched from a connected ServiceNow instance in this public demo.</p>{knowledgeSearched && <div className="knowledge-results">{knowledge.map(item => <article className="knowledge-result" key={item.id}><div><span className="result-category">{item.category} · relevance {percent(item.score)}</span><h3>{item.title}</h3><p>{item.snippet}</p><small>{item.source}</small></div><BookOpen/></article>)}{!knowledge.length && <EmptyState title="No matching runbooks" detail="Try a shorter term or a different incident keyword."/>}</div>}</section></>}
+
+        {page === 'Approvals' && <><PageHeading title="Human approvals" description="High-impact actions stay paused until a different operator approves them."/><section className="page-card"><div className="approval-summary"><ShieldAlert/><div><b>{approvalCount} action{approvalCount === 1 ? '' : 's'} awaiting approval</b><small>Approvals execute a mock action and are written to the incident audit log.</small></div></div><label className="operator-field">Approver name<input value={operatorName} onChange={e => setOperatorName(e.target.value)} placeholder="Enter your name"/></label>{pendingApprovals.map(item => <article className="approval-item" key={item.id}><div><span className="result-category">{item.number} · {item.priority} · {item.status}</span><h3>{item.title}</h3><p>{item.pending.map(a => `${a.name} — ${a.description || a.result}`).join(' · ')}</p><small>Requested by {item.pending[0]?.requested_by || 'an operator'} · {item.assigned_group}</small></div><button className="primary-button" disabled={busy || !operatorName.trim() || item.pending.some(a => a.requested_by?.toLowerCase() === operatorName.trim().toLowerCase())} onClick={() => void approve(item)}><CheckCircle2/> Approve next</button></article>)}{!pendingApprovals.length && <EmptyState title="Nothing needs approval" detail="Approval requests will appear here before any elevated action can run."/>}</section></>}
+
+        {page === 'Evaluations' && <><PageHeading title="Agent evaluations" description="Deterministic evaluation against the labeled sample incidents bundled with this project." action={<button className="secondary-button" onClick={() => { setEvaluation(null); void request('/evaluation').then(setEvaluation).catch(e => setError(friendlyError(e))); }}><RefreshCw/> Recalculate</button>}/>{evaluation ? <><section className="evaluation-grid">{[['Sample size', evaluation.sample_size], ['Classification accuracy', percent(evaluation.classification_accuracy)], ['Priority accuracy', percent(evaluation.priority_accuracy)], ['Escalation accuracy', percent(evaluation.escalation_accuracy)], ['Mean confidence', percent(evaluation.mean_confidence)], ['Confidence Brier score', evaluation.confidence_brier_score], ['False autonomous resolutions', evaluation.false_autonomous_resolutions], ['Human review rate', percent(evaluation.human_escalation_or_review_rate)]].map(([label, value]) => <div className="evaluation-card" key={label}><span>{label}</span><b>{value}</b></div>)}</section><div className="page-card evaluation-note"><ShieldAlert/><span><b>Simulation evaluation only.</b> {evaluation.notes}</span></div></> : <section className="page-card"><EmptyState title="Loading evaluation" detail="Fetching the labeled mock evaluation dataset…"/></section>}</>}
+
+        {page === 'Settings' && <><PageHeading title="System settings" description="Runtime configuration, safety thresholds, and demo integration tools."/><section className="settings-grid"><article className="page-card"><h2>Runtime and safety</h2><p>Configuration reported by the running API.</p><div className="settings-list"><Setting label="Environment" value={policy?.environment || 'Public demo'}/><Setting label="Language model" value={policy?.llm_provider || 'Loading…'}/><Setting label="ServiceNow adapter" value={policy?.servicenow_mode || 'Loading…'}/><Setting label="Automatic decision threshold" value={policy ? percent(policy.confidence_auto_threshold) : '—'}/><Setting label="Human review threshold" value={policy ? percent(policy.confidence_investigate_threshold) : '—'}/><Setting label="Authentication" value={policy?.authentication_enabled ? 'Enabled' : 'Disabled in public demo'}/><Setting label="Knowledge sources" value={policy?.knowledge_sources ?? '—'}/></div><div className="demo-notice"><LockKeyhole/><span><b>Public demo guardrails</b><small>AI and ServiceNow providers are mock-only. Proposed actions are simulated and do not change external systems. The public demo has no sign-in.</small></span></div></article><article className="page-card"><h2>ServiceNow demo sync</h2><p>These controls call the configured adapter. In this deployment it is a mock, not your company instance.</p><div className="settings-buttons"><button className="secondary-button" onClick={() => void syncServiceNow()} disabled={busy}><RefreshCw/> Sync incidents</button><button className="secondary-button" onClick={() => void retryPending()} disabled={busy}><RefreshCw/> Retry pending sync</button></div>{servicenowResult && <div className="sync-result" role="status">{servicenowResult}</div>}<div className="demo-notice"><Wifi/><span><b>Live dashboard updates</b><small>The incident queue polls the backend every 7 seconds while the page is visible and refreshes when you return to the tab.</small></span></div></article></section></>}
+      </div>
+    </main>
+
+    {createOpen && <div className="detail-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !busy) setCreateOpen(false); }}><section className="form-modal" role="dialog" aria-modal="true" aria-labelledby="create-title"><button className="detail-close" onClick={() => setCreateOpen(false)} disabled={busy}><X/></button><div className="eyebrow">NEW WORK ITEM</div><h2 id="create-title">Create incident</h2><p>Submit an incident for mock analysis, prioritization, and routing.</p><form onSubmit={doCreate} className="stacked-form"><label>Short description<input autoFocus required minLength={4} maxLength={200} value={createForm.title} onChange={e => setCreateForm({ ...createForm, title: e.target.value })} placeholder="e.g. VPN disconnects after sign-in"/></label><label>Description<textarea required minLength={8} maxLength={8000} rows={4} value={createForm.description} onChange={e => setCreateForm({ ...createForm, description: e.target.value })} placeholder="Describe what happened, scope, and any recovery evidence."/></label><label>Affected users<input type="number" required min={1} max={100000} value={createForm.affected_users} onChange={e => setCreateForm({ ...createForm, affected_users: Number(e.target.value) })}/></label><label>Business criticality<select value={createForm.business_criticality} onChange={e => setCreateForm({ ...createForm, business_criticality: Number(e.target.value) })}><option value={1}>High</option><option value={2}>Medium</option><option value={3}>Low</option></select></label><label>Service (optional)<input maxLength={100} value={createForm.service} onChange={e => setCreateForm({ ...createForm, service: e.target.value })} placeholder="Business service"/></label>{createError && <div className="form-error">{createError}</div>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setCreateOpen(false)} disabled={busy}>Cancel</button><button className="primary-button" disabled={busy}>{busy ? 'Creating…' : 'Create and analyze'}</button></div></form><small className="mock-disclaimer">Public mock demo · no production ServiceNow record will be changed.</small></section></div>}
+
+    {selected && <div className="detail-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setSelected(null); }}><section className="detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title"><button className="detail-close" onClick={() => setSelected(null)}>Close <X/></button><div className="eyebrow">INCIDENT DETAIL · {selected.number}</div><h2 id="detail-title">{selected.title}</h2><p>{selected.description}</p><div className="detail-stats"><span><b>{selected.priority}</b> Priority</span><span><b>{percent(selected.confidence)}</b> Confidence</span><span><b>{selected.status}</b> Status</span><span><b>{selected.assigned_group}</b> Assignment group</span></div><h3>Decision explanation</h3><p>{selected.decision.decision_explanation || selected.decision.escalation_reason || 'Not analyzed yet.'}</p><h3>Knowledge sources</h3>{selected.knowledge?.length ? selected.knowledge.map((item: any) => <div className="detail-item" key={item.id}><b>{item.title}</b><span>{item.source} · relevance {percent(item.score)}</span></div>) : <p className="muted-note">No matching knowledge sources recorded.</p>}<h3>Actions and verification</h3>{selected.actions?.length ? selected.actions.map((item: any, index: number) => <div className="detail-item" key={`${item.name}-${index}`}><b>{item.name} · {item.status}</b><span>{item.result}{item.requested_by ? ` · requested by ${item.requested_by}` : ''}</span>{item.status === 'approval_required' && <button className="secondary-button" onClick={() => void approve(selected)}>Approve next action</button>}</div>) : <p className="muted-note">No action recorded yet.</p>}{selected.decision.verification && <div className="demo-notice"><CheckCircle2/><span><b>{selected.decision.verification.verified ? 'Simulation verified' : 'Needs human verification'}</b><small>{selected.decision.verification.message}</small></span></div>}
+      <h3>Agent controls</h3><div className="detail-actions"><button className="secondary-button" onClick={() => void processSelected()} disabled={busy}><Sparkles/> Process / re-analyze</button><button className="primary-button" onClick={() => setDetailAction(detailAction === 'escalate' ? '' : 'escalate')} disabled={busy}><Headphones/> Escalate</button></div>
+      {detailAction === 'escalate' && <div className="inline-form"><label>Reason<input value={escalationReason} onChange={e => setEscalationReason(e.target.value)} minLength={4}/></label><label>Assignment group<input value={assignmentGroup} onChange={e => setAssignmentGroup(e.target.value)} placeholder={selected.assigned_group}/></label><button className="primary-button" onClick={() => void escalateSelected()} disabled={busy || escalationReason.trim().length < 4}>Confirm escalation</button></div>}
+      <div className="inline-form action-request"><label>Request an allowlisted action<select value={detailAction && detailAction !== 'escalate' ? detailAction : ''} onChange={e => setDetailAction(e.target.value)}><option value="">Select action…</option>{matchingActions.map(a => <option key={a.name} value={a.name}>{a.name} · {a.risk} risk{a.approval ? ' · approval required' : ''}</option>)}</select></label><label>Requesting operator<input value={actionOperator} onChange={e => setActionOperator(e.target.value)} minLength={2}/></label><button className="secondary-button" onClick={() => void requestAction()} disabled={busy || !detailAction || detailAction === 'escalate' || actionOperator.trim().length < 2}>Submit action request</button></div>
+      <h3>Incident record</h3><div className="inline-form"><label>Assignment group<input value={assignmentGroup} onChange={e => setAssignmentGroup(e.target.value)}/></label><label>Status<select value={selected.status} onChange={e => void saveIncident({ status: e.target.value }, 'Incident status updated.')}>{['New', 'Investigating', 'Human review', 'Escalated', 'Resolved', 'Closed'].map(x => <option key={x}>{x}</option>)}</select></label><button className="secondary-button" onClick={() => void saveIncident({ assigned_group: assignmentGroup }, 'Assignment group updated.')} disabled={busy}>Save assignment</button></div><label className="notes-editor">Work notes<textarea rows={4} value={workNotes} onChange={e => setWorkNotes(e.target.value)} maxLength={8000}/></label><button className="secondary-button notes-save" onClick={() => void saveIncident({ work_notes: workNotes }, 'Work notes saved to the incident timeline.')} disabled={busy}>Save work notes</button>
+      <h3>Activity and audit</h3>{audit.length ? audit.slice().reverse().map(event => <div className="detail-item" key={event.id}><b>{event.event.replace(/_/g, ' ')}</b><span>{new Date(event.timestamp).toLocaleString()} · {event.model}</span>{event.payload && <small>{JSON.stringify(event.payload)}</small>}</div>) : <p className="muted-note">Audit events load when you open this record.</p>}{selected.work_notes && <><h3>Escalation work notes</h3><pre>{selected.work_notes}</pre></>}</section></div>}
+  </div>;
+}
+
+function IncidentRow({ incident: x, onOpen }: { incident: Incident; onOpen: () => void }) {
+  const tone = x.status === 'Escalated' ? 'red' : x.status === 'Human review' ? 'amber' : x.status === 'Resolved' ? 'green' : 'blue';
+  const icon = x.category.toLowerCase().includes('vpn') ? 'vpn' : x.category.toLowerCase().includes('authentication') || x.category.toLowerCase().includes('access') ? 'lock' : x.category.toLowerCase().includes('software') ? 'mail' : 'globe';
+  return <tr onClick={onOpen} className="clickable"><td><div className="incident-title"><div className={`ticket-icon ${icon}`}>{icon === 'vpn' ? <Wifi/> : icon === 'lock' ? <LockKeyhole/> : icon === 'mail' ? <Bot/> : <Activity/>}</div><div><b>{x.title}</b><span>{x.number} <i>·</i> {formatTime(x.created_at)}</span></div></div></td><td>{x.category} · {x.subcategory}</td><td><span className={`priority ${x.priority.toLowerCase()}`}><i/>{x.priority}</span></td><td><div className="confidence"><div><i className={tone} style={{ width: percent(x.confidence) }}/></div><span>{percent(x.confidence)}</span></div></td><td><span className={`status ${x.status.toLowerCase().replace(/\s/g, '-')}`}><i/>{x.status}</span></td><td><div className="assignee"><span className={`avatar avatar-${tone}`}>{x.assigned_group.slice(0, 2).toUpperCase()}</span>{x.assigned_group}</div></td><td><button className="dots" aria-label={`Open ${x.number}`} onClick={e => { e.stopPropagation(); onOpen(); }}><MoreHorizontal/></button></td></tr>;
+}
+
+function Metric({ title, value, change, foot, icon, tone, chart, chartValue = 0, series = [] }: { title: string; value: string; change: string; foot: string; icon: React.ReactNode; tone: string; chart: string; chartValue?: number; series?: number[] }) {
+  return <div className="metric-card"><div className="metric-top"><span>{title}</span><div className={`metric-icon ${tone}`}>{icon}</div></div><div className="metric-value">{value}<span className={tone === 'amber' ? 'warning' : 'positive'}>{change}</span></div><div className="metric-foot">{foot}</div>{chart === 'progress' ? <div className="metric-progress"><i style={{ width: `${Math.round(chartValue * 100)}%` }}/></div> : chart === 'bars' ? <div className="bars" aria-label="Confidence per recent incident">{series.map((confidence, index) => <i key={index} title={`${Math.round(confidence * 100)}%`} style={{ height: `${Math.max(8, Math.round(confidence * 100))}%` }}/>)}</div> : null}</div>;
+}
+
+function ActivityCard({ active, events, onViewAll }: { active?: Incident; events: any[]; onViewAll: () => void }) {
+  const recent = events.slice(-6).reverse();
+  return <div className="activity-card"><div className="card-title-row"><div><h2>Agent activity</h2><p>Persisted decisions and actions</p></div><button className="text-button" onClick={onViewAll}>View all <ArrowRight/></button></div><div className="activity-incident"><div className="activity-symbol"><Wifi/></div><div><b>{active?.number || 'No incidents yet'} <i>·</i> {active?.title || 'Create an incident to begin'}</b><span>{active?.status || 'Waiting'} · {active ? `${percent(active.confidence)} confidence` : ''}</span></div><span className="live-pill"><i/> LIVE</span></div><div className="timeline">{recent.map((event: any, index: number) => <div className="timeline-row" key={`${event.timestamp}-${index}`}><time>{formatTime(event.timestamp)}</time><i className={index === 0 ? 'green' : 'blue'}/><span>{String(event.event).replace(/_/g, ' ')}</span></div>)}{!recent.length && <div className="empty-inline">No events recorded for this incident.</div>}</div><div className="timeline-current"><Zap/> {active?.decision?.escalation_reason || active?.decision?.recommended_action || 'No active analysis'}</div></div>;
+}
+
+function SafetyCard({ policy, onOpen }: { policy: any; onOpen: () => void }) {
+  return <div className="safety-card"><div className="card-title-row"><div><h2>Safety overview</h2><p>Your guardrails at a glance</p></div><button className="dots" onClick={onOpen} aria-label="Open safety configuration"><MoreHorizontal/></button></div><div className="safety-score"><div className="score-ring"><b>✓<small>ON</small></b></div><div><b>Human oversight enforced</b><span>Policy configuration loaded</span></div><CheckCircle2/></div><div className="guardrail-list"><div><span><i/>Confidence threshold</span><b>≥ {policy ? percent(policy.confidence_auto_threshold) : '—'}</b></div><div><span><i/>Elevated actions</span><b>Approval required</b></div><div><span><i/>Knowledge sources</span><b>{policy?.knowledge_sources ?? '—'} runbooks</b></div></div><button className="guardrail-button" onClick={onOpen}><LockKeyhole/> View safety policies <ArrowRight/></button></div>;
+}
+
+function PageHeading({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) { return <section className="page-heading"><div><div className="eyebrow"><i/> NORTHSTAR WORKSPACE</div><h1>{title}</h1><p>{description}</p></div>{action}</section>; }
+function EmptyState({ title, detail }: { title: string; detail: string }) { return <div className="empty-state-block"><div className="empty-icon"><Activity/></div><b>{title}</b><span>{detail}</span></div>; }
+function Setting({ label, value }: { label: string; value: string | number }) { return <div className="setting-row"><span>{label}</span><b>{value}</b></div>; }

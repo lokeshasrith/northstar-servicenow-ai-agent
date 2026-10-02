@@ -5,7 +5,7 @@
 ![React](https://img.shields.io/badge/UI-React%20%2B%20TypeScript-3178C6?logo=typescript&logoColor=white)
 ![CI](https://github.com/lokeshasrith/northstar-servicenow-ai-agent/actions/workflows/ci.yml/badge.svg)
 
-A local, human-supervised incident triage demo with a React operations dashboard, FastAPI orchestration API, PostgreSQL persistence, a ServiceNow adapter, source-attributed knowledge retrieval, deterministic safety policy, approval-gated actions, and auditable decisions.
+An interactive, human-supervised incident triage demo with a React operations dashboard, FastAPI orchestration API, PostgreSQL persistence, a ServiceNow adapter, source-attributed knowledge retrieval, deterministic safety policy, approval-gated actions, and auditable decisions. The dashboard has working incident forms, detail and audit views, client-side filters and sorting, live refresh, runbook search, approvals, evaluation metrics, and demo sync controls.
 
 Northstar demonstrates an end-to-end incident workflow: classify and prioritize a ticket, retrieve cited runbooks, explain the decision, request approval for risky actions, and retain an audit trail. The default setup is a safe local simulation; no external systems are changed.
 
@@ -57,6 +57,8 @@ Copy `.env.example` to `.env`. Defaults select the mock LLM and mock ServiceNow,
 - Explicit action registry with risk level, required permissions, input/output schemas, validation description, and audit entries. Read-only actions are simulated. Medium/high risk changes wait for a named approver.
 - Local mock ServiceNow adapter and optional real Table API adapter for incidents, assignment, work notes/comments, and knowledge queries.
 - Dashboard queue comes from the API and opens details for original description, decision explanation, confidence, retrieved sources, actions, escalation notes, timeline, and audit events.
+- All six dashboard sections are navigable and API-backed: Overview, Agent activity, Knowledge base, Approvals, Evaluations, and Settings. Queue search, status/priority/category filters, sorting, paging, manual refresh, and the seven-second visible-tab refresh are interactive.
+- Create and analyze incidents, reprocess, escalate, request allowlisted actions, record separate-operator approvals, edit status/assignment/work notes, search local runbooks, view evaluation results, and operate ServiceNow mock sync/retry from the dashboard.
 - Basic request throttling and optional API-key roles. The UI never displays private chain-of-thought.
 
 ## Safety and demo limits
